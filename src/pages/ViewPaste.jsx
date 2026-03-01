@@ -57,6 +57,12 @@ export default function ViewPaste() {
   const handleOpenPaste = async () => {
   try {
     const data = await getPaste(keyID) 
+
+    setPaste(prev => ({
+      ...prev,
+      viewCount: data.viewCount
+    }))
+
     window.open(data.downloadUrl, "_blank")
   } catch (err) {
     if (err.response?.status === 404) {
@@ -125,6 +131,7 @@ export default function ViewPaste() {
                 <p className="section-label" style={{ marginBottom: '6px' }}>paste</p>
                 <div className="view-title">{paste.keyID}</div>
                 <div className="view-subtitle">presigned URL expires in 10 minutes</div>
+                <div className="view-meta">Views: {paste.viewCount ?? 0}</div>
               </div>
 
               <div className="view-actions">
