@@ -9,6 +9,7 @@ export default function Home() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [imageFile, setImageFile] = useState(null)
+  const [password, setPassword] = useState('')
 
   // =============================
   // TEXT PASTE SUBMIT
@@ -39,12 +40,14 @@ export default function Home() {
     try {
       const data = await createPaste({
         content,
-        ttl: ttlValue
+        ttl: ttlValue,
+        password: password || null
       })
 
       setResult(data)
       setContent('')
       setTtl('')
+      setPassword('')
     } catch (err) {
       const msg =
         err.response?.data?.message ||
@@ -75,7 +78,8 @@ export default function Home() {
 
       const data = await createOcrPaste({
         base64Image: base64.split(',')[1],
-        ttl: ttl !== '' ? Number(ttl) : null
+        ttl: ttl !== '' ? Number(ttl) : null,
+        password: password || null
       })
 
       setResult(data)
@@ -196,6 +200,15 @@ export default function Home() {
               <span className="ttl-label">seconds</span>
             </div>
 
+            <input
+                className='password-input'
+                type="password"
+                placeholder="Optional password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+
             <span
               style={{
                 marginLeft: 'auto',
@@ -238,12 +251,35 @@ export default function Home() {
               <span className="key-value">{result.keyID}</span>
             </div>
 
-            <Link
-              className="paste-link"
-              to={`/paste/${result.keyID}`}
-            >
-              View paste → /paste/{result.keyID}
-            </Link>
+            {(() => {
+              const fullUrl = `${window.location.origin}/paste/${result.keyID}`
+
+              return (
+                <>
+                  <div className="key-display">
+                    <span className="key-label">LINK</span>
+                    <span className="key-value">{fullUrl}</span>
+                  </div>
+
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginTop: '12px' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(fullUrl)
+                    }}
+                  >
+                    Copy link
+                  </button>
+
+                  <Link
+                    className="paste-link"
+                    to={`/paste/${result.keyID}`}
+                  >
+                    Open paste →
+                  </Link>
+                </>
+              )
+            })()}
           </div>
         )}
       </div>
