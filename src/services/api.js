@@ -50,4 +50,13 @@ export const deletePaste = async (keyID) => {
   await api.delete(`/paste/${keyID}`)
 }
 
+export const summarizePaste = async (keyID, password) => {
+  const config = {}
+  if (password) {
+    config.params = { password }
+  }
+  const { data } = await api.get(`/paste/${keyID}/summarize`, config)
+  return data
+}
+
 export default api

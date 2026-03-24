@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getPaste, deletePaste } from '../services/api'
+import { getPaste, deletePaste, summarizePaste } from '../services/api'
 
 export default function ViewPaste() {
   const { keyID } = useParams()
@@ -18,6 +18,10 @@ export default function ViewPaste() {
   const [needsPassword, setNeedsPassword] = useState(false)
   const [wrongPassword, setWrongPassword] = useState(false)
 
+  const [summary, setSummary] = useState(null)
+  const [summarizing, setSummarizing] = useState(false)
+  const [summaryError, setSummaryError] = useState(null)
+
   useEffect(() => {
     const fetchPaste = async () => {
       try {
@@ -31,15 +35,12 @@ export default function ViewPaste() {
       } catch (err) {
         if (err.response?.status === 404) {
           setNotFound(true)
-        }
-        else if (err.response?.status === 401) {
+        } else if (err.response?.status === 401) {
           setNeedsPassword(true)
-        }
-        else if (err.response?.status === 403) {
+        } else if (err.response?.status === 403) {
           setWrongPassword(true)
           setNeedsPassword(true)
-        }
-        else {
+        } else {
           setError(
             err.response?.data?.message ||
             err.response?.data?.error ||
@@ -85,17 +86,38 @@ export default function ViewPaste() {
 
       if (status === 403) {
         setWrongPassword(true)
-      }
-      else if (status === 404) {
+      } else if (status === 404) {
         setPaste(null)
         setNeedsPassword(false)
         setNotFound(true)
-      }
-      else {
-        setError("Failed to verify password")
+      } else {
+        setError('Failed to verify password')
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSummarize = async () => {
+    setSummarizing(true)
+    setSummaryError(null)
+    setSummary(null)
+
+    try {
+      const data = await summarizePaste(keyID, password || undefined)
+      setSummary(data.summary)
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setSummaryError('Password required to summarize this paste.')
+      } else if (err.response?.status === 403) {
+        setSummaryError('Incorrect password.')
+      } else if (err.response?.status === 404) {
+        setSummaryError('Paste not found.')
+      } else {
+        setSummaryError('Failed to generate summary.')
+      }
+    } finally {
+      setSummarizing(false)
     }
   }
 
@@ -108,13 +130,13 @@ export default function ViewPaste() {
         viewCount: data.viewCount
       }))
 
-      window.open(data.downloadUrl, "_blank")
+      window.open(data.downloadUrl, '_blank')
     } catch (err) {
       if (err.response?.status === 404) {
         setPaste(null)
         setNotFound(true)
       } else {
-        setError("Failed to open paste")
+        setError('Failed to open paste')
       }
     }
   }
@@ -122,6 +144,7 @@ export default function ViewPaste() {
   return (
     <div className="page">
       <div className="container">
+
         {/* Brand */}
         <header className="brand">
           <div className="brand-dot" />
@@ -162,7 +185,9 @@ export default function ViewPaste() {
         {!loading && error && (
           <div className="notice notice-error" style={{ marginBottom: '24px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
-              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             {error}
           </div>
@@ -210,7 +235,7 @@ export default function ViewPaste() {
               <div>
                 <p className="section-label" style={{ marginBottom: '6px' }}>paste</p>
                 <div className="view-title">{paste.keyID}</div>
-                <div className="view-subtitle">presigned URL expires in ttl seconds</div>
+                <div className="view-subtitle">presigned URL expires in 10 minutes</div>
                 <div className="view-meta">Views: {paste.viewCount ?? 0}</div>
               </div>
 
@@ -225,6 +250,19 @@ export default function ViewPaste() {
                     <line x1="10" y1="14" x2="21" y2="3" />
                   </svg>
                   open paste
+                </button>
+
+                {/* Summarize button */}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSummarize}
+                  disabled={summarizing}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  {summarizing ? 'summarizing…' : 'summarize'}
                 </button>
 
                 <button
@@ -256,15 +294,46 @@ export default function ViewPaste() {
               </div>
             </div>
 
+            {/* Presigned URL info */}
             <div className="notice notice-info">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
               </svg>
               <span>
                 Click <strong style={{ color: 'var(--text)' }}>Open Paste</strong> to view or download the content via a secure S3 presigned URL.
-                The link is valid for <strong style={{ color: 'var(--text)' }}>ttl seconds</strong> from page load.
+                The link is valid for <strong style={{ color: 'var(--text)' }}>10 minutes</strong> from page load.
               </span>
             </div>
+
+            {/* Summary Error */}
+            {summaryError && (
+              <div className="notice notice-error" style={{ marginTop: '16px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {summaryError}
+              </div>
+            )}
+
+            {/* Summary Result */}
+            {summary && (
+              <div className="notice notice-info" style={{ marginTop: '16px', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  <strong style={{ color: 'var(--text)', fontSize: '13px' }}>AI Summary</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--text)' }}>
+                  {summary}
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>
