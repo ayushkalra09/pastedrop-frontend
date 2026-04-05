@@ -5,6 +5,32 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+const unwrap = (data) => {
+  if (data && typeof data.body === 'string') {
+    return JSON.parse(data.body)
+  }
+  return data
+}
+
+api.interceptors.response.use(
+  (response) => {
+    const data = response.data
+
+    if (data && data.statusCode && data.statusCode >= 400) {
+      const parsed = typeof data.body === 'string' ? JSON.parse(data.body) : data.body
+      const error = new Error(parsed?.error || parsed?.message || 'Request failed')
+      error.response = {
+        status: data.statusCode,
+        data: parsed,
+      }
+      return Promise.reject(error)
+    }
+
+    return response
+  },
+  (error) => Promise.reject(error)
+)
+
 export const createOcrPaste = async ({ base64Image, ttl, password }) => {
   const body = { base64Image }
 
@@ -17,7 +43,7 @@ export const createOcrPaste = async ({ base64Image, ttl, password }) => {
   }
 
   const { data } = await api.post('/ocr', body)
-  return data
+  return unwrap(data)
 }
 
 export const createPaste = async ({ content, ttl, password }) => {
@@ -32,7 +58,7 @@ export const createPaste = async ({ content, ttl, password }) => {
   }
 
   const { data } = await api.post('/paste', body)
-  return data
+  return unwrap(data)
 }
 
 export const getPaste = async (keyID, password) => {
@@ -43,7 +69,7 @@ export const getPaste = async (keyID, password) => {
   }
 
   const { data } = await api.get(`/paste/${keyID}`, config)
-  return data
+  return unwrap(data)
 }
 
 export const deletePaste = async (keyID) => {
@@ -52,11 +78,13 @@ export const deletePaste = async (keyID) => {
 
 export const summarizePaste = async (keyID, password) => {
   const config = {}
+
   if (password) {
     config.params = { password }
   }
+
   const { data } = await api.get(`/paste/${keyID}/summarize`, config)
-  return data
+  return unwrap(data)
 }
 
 export default api

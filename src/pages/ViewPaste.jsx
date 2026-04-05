@@ -22,6 +22,8 @@ export default function ViewPaste() {
   const [summarizing, setSummarizing] = useState(false)
   const [summaryError, setSummaryError] = useState(null)
 
+  const [isPolling, setIsPolling] = useState(false);
+
   useEffect(() => {
     const fetchPaste = async () => {
       try {
@@ -99,27 +101,66 @@ export default function ViewPaste() {
   }
 
   const handleSummarize = async () => {
-    setSummarizing(true)
-    setSummaryError(null)
-    setSummary(null)
+    setSummarizing(true);
+    setSummaryError(null);
+    setSummary(null);
 
     try {
-      const data = await summarizePaste(keyID, password || undefined)
-      setSummary(data.summary)
-    } catch (err) {
-      if (err.response?.status === 401) {
-        setSummaryError('Password required to summarize this paste.')
-      } else if (err.response?.status === 403) {
-        setSummaryError('Incorrect password.')
-      } else if (err.response?.status === 404) {
-        setSummaryError('Paste not found.')
+      const data = await summarizePaste(keyID, password || undefined);
+
+      if (data.summary === "PENDING") {
+        setIsPolling(true);
+        pollForSummary();
       } else {
-        setSummaryError('Failed to generate summary.')
+        setSummary(data.summary);
+        setSummarizing(false);
       }
-    } finally {
-      setSummarizing(false)
+    } catch (err) {
+      handleSummaryError(err);
+      setSummarizing(false);
     }
-  }
+  };
+
+  const pollForSummary = async () => {
+    let attempts = 0;
+    const maxAttempts = 15; // Max 30 seconds (15 * 2s)
+
+    const interval = setInterval(async () => {
+      try {
+        attempts++;
+        const data = await summarizePaste(keyID, password || undefined);
+
+        if (data.summary !== "PENDING") {
+          setSummary(data.summary);
+          setSummarizing(false);
+          setIsPolling(false);
+          clearInterval(interval);
+        }
+
+        if (attempts >= maxAttempts) {
+          setSummaryError("Summary is taking longer than expected. Please refresh.");
+          setSummarizing(false);
+          setIsPolling(false);
+          clearInterval(interval);
+        }
+      } catch (err) {
+        handleSummaryError(err);
+        setSummarizing(false);
+        setIsPolling(false);
+        clearInterval(interval);
+      }
+    }, 2000);
+  };
+
+  const handleSummaryError = (err) => {
+    if (err.response?.status === 401) {
+      setSummaryError('Password required to summarize this paste.');
+    } else if (err.response?.status === 403) {
+      setSummaryError('Incorrect password.');
+    } else {
+      setSummaryError('Failed to generate summary.');
+    }
+  };
 
   const handleOpenPaste = async () => {
     try {
@@ -320,17 +361,38 @@ export default function ViewPaste() {
             )}
 
             {/* Summary Result */}
-            {summary && (
-              <div className="notice notice-info" style={{ marginTop: '16px', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+            {(summarizing || summary) && (
+              <div className="notice notice-info summary-box" style={{ marginTop: '16px', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                  <svg
+                    className={summarizing ? "spin" : ""}
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    style={{ flexShrink: 0 }}
+                  >
                     <path d="M12 20h9" />
                     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                   </svg>
-                  <strong style={{ color: 'var(--text)', fontSize: '13px' }}>AI Summary</strong>
+
+                  <strong style={{ color: 'var(--text)', fontSize: '13px' }}>
+                    {summarizing ? "AI is thinking..." : "AI Summary"}
+                  </strong>
                 </div>
-                <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--text)' }}>
-                  {summary}
+
+                <p style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  color: 'var(--text)',
+                  opacity: summarizing ? 0.7 : 1
+                }}>
+                  {summarizing
+                    ? "Our worker is processing your request via Amazon Bedrock. This usually takes 3-5 seconds..."
+                    : summary}
                 </p>
               </div>
             )}
